@@ -81,6 +81,23 @@ function detail(id) {
   return out;
 }
 
+function evaluate({ brand = "", model = "", text = "", system = "" }) {
+  const hits = search(text, 5);
+  const sysId = systems[system] ? system : null;
+  const base = { brand, model, query: text, systemId: sysId, systemName: sysId ? systems[sysId].name : null };
+  if (!hits.length) return { ...base, match: null, candidates: [] };
+  const top = hits[0];
+  const d = detail(top.id);
+  const sys = sysId ? d.systems.find(s => s.id === sysId) : null;
+  return {
+    ...base,
+    match: { id: d.id, name: d.name, cat: d.cat, summary: d.summary, score: top.score },
+    candidates: hits.slice(1).map(h => ({ id: h.id, name: h.name, score: h.score })),
+    system: sys || null,
+    evidenceChecklist: sys ? d.evidenceChecklist.filter(c => c.usedBy.some(u => u.startsWith(sys.short + " "))) : []
+  };
+}
+
 function bulk(text) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 60);
   return lines.map(line => {
@@ -105,6 +122,15 @@ http.createServer((req, res) => {
   if (p.startsWith("/api/material/")) { const d = detail(p.split("/").pop()); return d ? json(res, 200, d) : json(res, 404, { error: "unbekannt" }); }
   if (p === "/api/bulk" && req.method === "POST") {
     let body = ""; req.on("data", c => body += c); req.on("end", () => { try { json(res, 200, bulk(JSON.parse(body).text || "")); } catch { json(res, 400, { error: "bad json" }); } });
+    return;
+  }
+  if (p === "/api/evaluate" && req.method === "POST") {
+    let body = ""; req.on("data", c => body += c); req.on("end", () => {
+      try {
+        const b = JSON.parse(body);
+        json(res, 200, evaluate({ brand: b.brand || "", model: b.model || "", text: b.text || "", system: b.system || "" }));
+      } catch { json(res, 400, { error: "bad json" }); }
+    });
     return;
   }
 
