@@ -74,6 +74,24 @@ function detail(id) {
   return out;
 }
 
+function evaluate({ brand = "", model = "", text = "", system = "" }) {
+  const systems = DATA.systems;
+  const hits = search(text, 5);
+  const sysId = systems[system] ? system : null;
+  const base = { brand, model, query: text, systemId: sysId, systemName: sysId ? systems[sysId].name : null };
+  if (!hits.length) return { ...base, match: null, candidates: [] };
+  const top = hits[0];
+  const d = detail(top.id);
+  const sys = sysId ? d.systems.find(s => s.id === sysId) : null;
+  return {
+    ...base,
+    match: { id: d.id, name: d.name, cat: d.cat, summary: d.summary, score: top.score },
+    candidates: hits.slice(1).map(h => ({ id: h.id, name: h.name, score: h.score })),
+    system: sys || null,
+    evidenceChecklist: sys ? d.evidenceChecklist.filter(c => c.usedBy.some(u => u.startsWith(sys.short + " "))) : []
+  };
+}
+
 function bulk(text) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 60);
   return lines.map(line => {
@@ -92,11 +110,20 @@ const badge = l => `<span class="badge b-${l}">${l}</span>`;
 function wireUI() {
   document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
-    $("#single").hidden = b.dataset.tab !== "single"; $("#bulk").hidden = b.dataset.tab !== "bulk";
+    $("#single").hidden = b.dataset.tab !== "single"; $("#bulk").hidden = b.dataset.tab !== "bulk"; $("#eval").hidden = b.dataset.tab !== "eval";
   });
 
   $("#chips").innerHTML = DATA.materials.map(m => `<span data-id="${m.id}">${esc(m.name.split(" (")[0])}</span>`).join("");
   $("#chips").querySelectorAll("span").forEach(s => s.onclick = () => load(s.dataset.id));
+
+  $("#evSystem").innerHTML = Object.values(DATA.systems).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  const runEvaluate = () => {
+    const body = { brand: $("#evBrand").value.trim(), model: $("#evModel").value.trim(), text: $("#evText").value.trim(), system: $("#evSystem").value };
+    if (!body.text) { $("#evalResult").innerHTML = `<div class="head"><p>Bitte eine detaillierte Materialbezeichnung eingeben.</p></div>`; return; }
+    renderEvaluate(evaluate(body));
+  };
+  $("#evBtn").onclick = runEvaluate;
+  [$("#evBrand"), $("#evModel"), $("#evText")].forEach(el => el.addEventListener("keydown", e => { if (e.key === "Enter") runEvaluate(); }));
 
   let t, active = -1, sugg = [];
   $("#q").addEventListener("input", e => {
@@ -157,6 +184,44 @@ function load(id) {
   window.__last = d;
   $("#result").querySelectorAll(".ov").forEach(o => o.onclick = () => document.getElementById("sys-" + o.dataset.sys).scrollIntoView({ behavior: "smooth", block: "start" }));
   $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderEvaluate(d) {
+  const who = [d.brand, d.model].filter(Boolean).join(" · ");
+  if (!d.match) {
+    $("#evalResult").innerHTML = `<div class="head"><h2>Kein Treffer</h2><p class="evhead">${esc(who || d.query)}</p><p>Zu „${esc(d.query)}“ wurde keine passende Materialgruppe gefunden. Bitte präziser formulieren (Materialart statt nur Markenname) oder im Tab „Einzelnes Material“ manuell suchen.</p></div>`;
+    return;
+  }
+  const candList = d.candidates.length ? `<p class="evhead">Andere mögliche Treffer: ${d.candidates.map(c => `<a href="#" data-id="${c.id}">${esc(c.name)} (${c.score}%)</a>`).join(", ")}</p>` : "";
+  let sysHtml;
+  if (!d.systemId) {
+    sysHtml = `<p>Bitte ein Zertifizierungssystem auswählen.</p>`;
+  } else if (!d.system) {
+    sysHtml = `<p>Für ${esc(d.systemName)} sind bei dieser Materialgruppe keine Kriterien hinterlegt – vermutlich nicht betroffen.</p>`;
+  } else {
+    const s = d.system;
+    sysHtml = `<div class="systems"><div class="sys open" style="--c:${s.color}"><div class="t"><h3>${esc(s.name)}</h3>${badge(s.level)}<a href="${s.url}" target="_blank" rel="noopener">Kriterienkatalog ↗</a></div>
+      <div class="body"><table><thead><tr><th style="width:150px">Kriterium / Credit</th><th style="width:90px">Relevanz</th><th style="width:220px">Produktgruppe im System</th><th>Anforderung &amp; Nachweise</th></tr></thead><tbody>
+      ${s.entries.map(e => `<tr>
+        <td class="code"><a href="${e.url}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(e.code)}</a><small>${esc(e.title)}</small><small style="color:var(--accent)">${esc(e.topic)}</small></td>
+        <td>${badge(e.relevance)}</td><td>${esc(e.productGroup)}</td>
+        <td>${esc(e.requirement)}${e.evidence.length ? `<ul class="ev">${e.evidence.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</td></tr>`).join("")}
+      </tbody></table>
+      ${s.notAffected.length ? `<div class="na">Nicht betroffen: ${s.notAffected.map(n => esc(n.code + " " + n.title)).join(" · ")}</div>` : ""}
+      </div></div></div>
+      ${d.evidenceChecklist.length ? `<div class="check"><h3>Nachweis-Checkliste für die Herstelleranfrage</h3><ol>${d.evidenceChecklist.map(c => `<li>${esc(c.doc)}</li>`).join("")}</ol></div>` : ""}`;
+  }
+  $("#evalResult").innerHTML = `
+    <div class="head"><h2>${esc(d.match.name)}</h2><div class="cat">${esc(d.match.cat)}</div>
+    <p class="evhead">${who ? esc(who) + " · " : ""}Zugeordnet zu „${esc(d.query)}“ (${d.match.score}% Übereinstimmung)</p>
+    <p>${esc(d.match.summary)}</p>${candList}</div>
+    ${sysHtml}
+    <div class="toolbar"><button class="btn sec" onclick="window.print()">Als PDF drucken</button></div>`;
+  $("#evalResult").querySelectorAll("a[data-id]").forEach(a => a.onclick = e => {
+    e.preventDefault();
+    const name = a.textContent.replace(/\s*\(\d+%\)$/, "");
+    renderEvaluate(evaluate({ brand: $("#evBrand").value.trim(), model: $("#evModel").value.trim(), text: name, system: $("#evSystem").value }));
+  });
 }
 
 async function init() {

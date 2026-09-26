@@ -60,7 +60,13 @@
   .bulk td .badge{margin-right:4px}
   .foot{margin-top:30px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
   .toolbar{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
-  @media print{header,.tabs,.search,.chips,.toolbar,.foot{display:none}.sys .body{display:block!important}body{background:#fff}main{max-width:none;padding:0}}
+  .evalform{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .evalform label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+  .evalform input,.evalform select{font:15px/1.4 inherit;padding:10px 12px;border:2px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+  .evalform input:focus,.evalform select:focus{outline:none;border-color:var(--accent)}
+  .evalform .btn{grid-column:1/-1;justify-self:start}
+  .evhead{color:var(--muted);font-size:13px;margin:2px 0 0}
+  @media print{header,.tabs,.search,.chips,.toolbar,.foot,.evalform{display:none}.sys .body{display:block!important}body{background:#fff}main{max-width:none;padding:0}}
 </style>
 </head>
 <body>
@@ -72,6 +78,7 @@
   <div class="tabs">
     <button class="on" data-tab="single">Einzelnes Material</button>
     <button data-tab="bulk">Materialliste / LV prüfen</button>
+    <button data-tab="eval">Marke &amp; Produkt bewerten</button>
   </div>
 
   <section id="single">
@@ -99,6 +106,18 @@ Sopro Flexkleber
 Teppichfliese Objekt</textarea>
     <button class="btn" id="bulkBtn">Liste prüfen</button>
     <div id="bulkResult" class="result"></div>
+  </section>
+
+  <section id="eval" hidden>
+    <p style="margin:0 0 12px;color:var(--muted)">Marke, Modell und eine möglichst genaue Materialbeschreibung eingeben, Zertifizierungssystem wählen – die App ordnet das Produkt einer Materialgruppe zu und zeigt die Anforderungen nur für dieses System.</p>
+    <div class="evalform">
+      <label>Marke<input id="evBrand" placeholder="z. B. Knauf Insulation"></label>
+      <label>Modell<input id="evModel" placeholder="z. B. TP 115 Klemmfilz"></label>
+      <label>Detaillierte Materialbezeichnung<input id="evText" placeholder="z. B. Mineralwolle-Klemmfilz, 160 mm, WLG 035, unkaschiert"></label>
+      <label>Zertifizierungssystem<select id="evSystem"></select></label>
+      <button class="btn" id="evBtn">Bewerten</button>
+    </div>
+    <div id="evalResult" class="result"></div>
   </section>
 
   <p class="foot">Demo-Datensatz: Kriteriennummern nach DGNB System Gebäude Neubau 2023, QNG 2023 (Anlage 3), LEED v4.1 BD+C, BREEAM International NC 2016, EU-Taxonomie Del. VO (EU) 2021/2139 Anhang I 7.1 / Anlage C, BNB BN 2015. Die Einordnung ist eine Kriterien-Landkarte, kein Produktnachweis: ob ein konkretes Produkt die Anforderung erfüllt, ergibt sich erst aus den Herstellerunterlagen (SDB, EPD, Emissionsprüfbericht etc.). Vor Projektnutzung gegen den jeweils gültigen Kriterienkatalog prüfen.</p>
